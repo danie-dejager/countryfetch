@@ -17,6 +17,8 @@ BuildRequires: gcc
 BuildRequires: make
 BuildRequires: gzip
 BuildRequires: upx
+BuildRequires: perl-IPC-Cmd
+BuildRequires: perl-FindBin
 
 %description
 Countryfetch is a neofetch-like tool for fetching information about your country.
