@@ -17,6 +17,7 @@ BuildRequires: gcc
 BuildRequires: make
 BuildRequires: gzip
 BuildRequires: upx
+BuildRequires: perl
 BuildRequires: perl-IPC-Cmd
 BuildRequires: perl-FindBin
 
