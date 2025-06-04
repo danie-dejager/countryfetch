@@ -1,58 +1,31 @@
 use core::error;
 
-use clap::Parser;
+use anstyle::{AnsiColor, Effects};
+use clap::{Parser, ValueEnum as _};
 
-use clap::ValueEnum as _;
+use crate::cache::Cache;
+use crate::country_format::format_country;
+use crate::{Country, Location, generated_country_data};
 
-use crate::{Country, Location, cache::Cache, country_format::format_country};
-
-pub fn get_styles() -> clap::builder::Styles {
-    clap::builder::Styles::styled()
-        .usage(
-            anstyle::Style::new()
-                .bold()
-                .underline()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
-        )
-        .header(
-            anstyle::Style::new()
-                .bold()
-                .underline()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
-        )
-        .literal(
-            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
-        )
-        .invalid(
-            anstyle::Style::new()
-                .bold()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
-        )
-        .error(
-            anstyle::Style::new()
-                .bold()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
-        )
-        .valid(
-            anstyle::Style::new()
-                .bold()
-                .underline()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
-        )
-        .placeholder(
-            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::White))),
-        )
-}
+/// Styles for the CLI
+const STYLES: clap::builder::Styles = clap::builder::Styles::styled()
+    .header(AnsiColor::BrightGreen.on_default().effects(Effects::BOLD))
+    .usage(AnsiColor::BrightGreen.on_default().effects(Effects::BOLD))
+    .literal(AnsiColor::BrightCyan.on_default().effects(Effects::BOLD))
+    .placeholder(AnsiColor::BrightCyan.on_default())
+    .error(AnsiColor::BrightRed.on_default().effects(Effects::BOLD))
+    .valid(AnsiColor::BrightCyan.on_default().effects(Effects::BOLD))
+    .invalid(AnsiColor::BrightYellow.on_default().effects(Effects::BOLD));
 
 #[derive(Parser, Debug)]
-#[command(version, author = "Nik Revenco", about, long_about = None, styles=get_styles())]
+#[command(version, author = "Nik Revenco", about, long_about = None, styles = STYLES)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Clap is expected to have many command line arguments"
 )]
 pub struct Args {
     #[clap(hide_possible_values = true, ignore_case = true)]
-    pub country: Option<Vec<gen_country::Country>>,
+    pub country: Option<Vec<generated_country_data::Country>>,
     /// Print information about all countries
     #[arg(long)]
     pub all_countries: bool,
@@ -119,7 +92,7 @@ impl Args {
                 "`countryfetch` accepts any of the below values as an input.
 You can either use the country name, or the 2-letter country code. Case-insensitive."
             );
-            for country in gen_country::Country::ALL_COUNTRIES {
+            for country in generated_country_data::Country::ALL_COUNTRIES {
                 if let Some(value) = country.to_possible_value() {
                     let aliases = value
                         .get_name_and_aliases()
@@ -130,7 +103,7 @@ You can either use the country name, or the 2-letter country code. Case-insensit
             }
             return Ok(());
         } else if self.all_countries {
-            for country in gen_country::Country::ALL_COUNTRIES {
+            for country in generated_country_data::Country::ALL_COUNTRIES {
                 let out = format_country(*country, None, None, &self);
                 println!("{out}");
             }
@@ -144,10 +117,11 @@ You can either use the country name, or the 2-letter country code. Case-insensit
                 println!("{out}");
             }
         } else if let Some(cache) = Cache::read() {
-            let gen_country =
-                gen_country::Country::country_code3_from_country_code2(&cache.country_code)
-                    .and_then(gen_country::Country::from_country_code)
-                    .expect("Stored a valid 2 letter country code in cache");
+            let gen_country = generated_country_data::Country::country_code3_from_country_code2(
+                &cache.country_code,
+            )
+            .and_then(generated_country_data::Country::from_country_code)
+            .expect("Stored a valid 2 letter country code in cache");
 
             println!("{}", format_country(gen_country, None, None, &self));
         } else {
@@ -157,12 +131,14 @@ You can either use the country name, or the 2-letter country code. Case-insensit
 
             let location = Location::from_ip(ip).await?;
             let country = Country::from_cc2(&location.country_code).await.ok();
-            let gen_country = gen_country::Country::from_country_code(
-                gen_country::Country::country_code3_from_country_code2(&location.country_code)
-                    .expect(
-                        "Location's country_code will always be valid 2 letter countrycode that \
-                         can be converted into a 3 letter country code",
-                    ),
+            let gen_country = generated_country_data::Country::from_country_code(
+                generated_country_data::Country::country_code3_from_country_code2(
+                    &location.country_code,
+                )
+                .expect(
+                    "Location's country_code will always be valid 2 letter countrycode that can \
+                     be converted into a 3 letter country code",
+                ),
             )
             .expect("Generated country code must exist");
 
