@@ -1,6 +1,6 @@
 %define name countryfetch
 %define version 0.2.0
-%define release 1%{?dist}
+%define release 2%{?dist}
 
 Summary:  A Command-line tool similar to Neofetch for obtaining information about your country 
 Name:     %{name}
