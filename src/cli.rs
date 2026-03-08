@@ -1,14 +1,27 @@
-//! The command-line interface
+//! Command-line interface for `countryfetch`
 
-use clap::ValueEnum;
-use eyre::Result;
-use strum::VariantArray;
-
-use crate::country_format::format_country;
-use crate::gen_countries;
 use anstyle::AnsiColor;
 use anstyle::Effects;
 use clap::Parser;
+use simply_colored::*;
+
+use crate::countries::COUNTRIES_DATA;
+use crate::country_display;
+use crate::country_display::AnsiRgb;
+
+#[derive(Parser)]
+#[command(version, about, styles = STYLES)]
+pub struct Cli {
+    /// Country to print. (case-insensitive)
+    #[clap(ignore_case = true, hide_possible_values = true, help = format!("Country to show data for. {BOLD}Choose any of:{NO_BOLD}\n\n{}", display_possible_countries()))]
+    pub country: Option<crate::gen_countries::CountryKind>,
+    /// Print all countries
+    #[arg(short, long)]
+    pub all: bool,
+    /// Print in JSON format
+    #[arg(short, long)]
+    pub json: bool,
+}
 
 /// Styles for the CLI
 const STYLES: clap::builder::Styles = clap::builder::Styles::styled()
@@ -20,91 +33,62 @@ const STYLES: clap::builder::Styles = clap::builder::Styles::styled()
     .valid(AnsiColor::BrightCyan.on_default().effects(Effects::BOLD))
     .invalid(AnsiColor::BrightYellow.on_default().effects(Effects::BOLD));
 
-#[derive(clap::ValueEnum, Clone, Debug, strum::VariantArray, strum::Display)]
-#[strum(serialize_all = "kebab-case")]
-//
-pub enum DataPiece {
-    Area,
-    Flag,
-    Emoji,
-    Continent,
-    Population,
-    Tlds,
-    Languages,
-    Currencies,
-    Neighbours,
-    EstablishmentDate,
-    IsoCode,
-    DrivingSide,
-    Capital,
-    DialingCode,
-    Palette,
-    Color,
-}
+/// Shows the list of countries that the user can use, displayed on --help
+fn display_possible_countries() -> String {
+    let mut output: Vec<String> = Vec::new();
 
-/// Countryfetch's arguments
-#[derive(Parser, Debug)]
-#[command(version, author = "Nik Revenco", about, long_about = None, styles = STYLES)]
-pub struct Cli {
-    /// A list of countries to generate output for. If it's empty, detect the
-    /// country
-    #[clap(hide_possible_values = true, ignore_case = true)]
-    pub country: Option<Vec<gen_countries::CountryKind>>,
-    /// Print information about all countries
-    #[arg(long)]
-    pub all_countries: bool,
-    /// Print a list of all countries that can be passed
-    #[arg(long)]
-    pub list_countries: bool,
-    /// Select which fields to show
-    #[arg(long)]
-    pub select: Vec<DataPiece>,
-}
-
-impl Cli {
-    /// # Panics
-    ///
-    /// - Stored invalid 2 letter country code in the cache file
-    pub fn print(self) -> Result<()> {
-        println!();
-
-        if self.list_countries {
-            println!(
-                "`countryfetch` accepts any of the below values as an input.
-You can either use the country name, or the 2-letter country code. Case-insensitive."
-            );
-            for country in gen_countries::CountryKind::VARIANTS {
-                if let Some(value) = country.to_possible_value() {
-                    let aliases = value
-                        .get_name_and_aliases()
-                        .collect::<Vec<&str>>()
-                        .join(", ");
-                    if let Some(emoji) = &country.data().flag {
-                        println!("{emoji} {aliases}");
-                    } else {
-                        println!("{aliases}");
-                    }
-                }
-            }
-            return Ok(());
-        } else if self.all_countries {
-            for country in gen_countries::all_countries() {
-                let out = format_country(country, &self);
-                println!("{out}");
-            }
-        } else if let Some(countries) = &self
-            .country
+    for country in COUNTRIES_DATA.0.iter() {
+        let flag = country
+            .flag
             .as_ref()
-            .and_then(|v: &Vec<gen_countries::CountryKind>| (!v.is_empty()).then_some(v))
-        {
-            for country in *countries {
-                let out = format_country(country.data(), &self);
-                println!("{out}");
-            }
-        } else {
-            panic!("argument is required");
-        }
+            .map(|flag| format!("{flag} "))
+            .unwrap_or_default();
+        let country_name = highlight_country_name(
+            &country.name.common,
+            &country.cca2,
+            country_display::brightest_color(country),
+        );
+        let country = format!("{flag}{country_name}");
 
-        Ok(())
+        const MAX_WIDTH: usize = 140;
+
+        if let Some(last) = output.last_mut()
+            && anstream::adapter::strip_str(last).to_string().len() <= MAX_WIDTH
+        {
+            last.push(' ');
+            last.push(' ');
+            last.push_str(&country);
+        } else {
+            output.push(country);
+        }
+    }
+
+    output.join("\n")
+}
+
+/// Given a `country_name` such as "United Kingdom" and an `alias` such as "UK", highlights
+/// the first matching letters of the country: "𝗨nited 𝗞ingdom"
+fn highlight_country_name(country_name: &str, alias: &str, highlight_color: AnsiRgb) -> String {
+    let mut alias_chars = alias.chars().peekable();
+
+    let mut output = String::new();
+
+    for word_char in country_name.chars() {
+        if alias_chars
+            .next_if(|alias_char| alias_char.eq_ignore_ascii_case(&word_char))
+            .is_some()
+        {
+            output.push_str(&format!("{BOLD}{highlight_color}{word_char}{RESET}"));
+        } else {
+            output.push(word_char);
+        }
+    }
+
+    if alias_chars.peek().is_some() {
+        // The country's name does not contain every character in the alias,
+        // so the alias would not be valid to highlight. Highlight nothing at all.
+        country_name.to_string()
+    } else {
+        output
     }
 }
