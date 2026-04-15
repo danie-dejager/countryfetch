@@ -30,6 +30,8 @@ Countryfetch is a neofetch-like tool for fetching information about your country
 %build
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 export PATH="$PATH:$HOME/.cargo/bin"
+%build
+export RUSTFLAGS="-C link-arg=-fuse-ld=bfd"
 cargo build --release --locked
 strip --strip-all target/release/%{name}
 mkdir -p %{buildroot}/%{_bindir}
